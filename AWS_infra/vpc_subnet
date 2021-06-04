@@ -1,0 +1,184 @@
+terraform {
+  required_version = ">= 0.13"
+}
+provider "aws" {
+  region     = "ap-southeast-1"
+  access_key = "AKIAQG4W6Z7LTZKCAO4R"
+  secret_key = "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"
+}
+
+
+
+resource "aws_vpc" "OSSCorp" {
+  cidr_block       = "10.0.0.0/16"
+  instance_tenancy = "default"
+
+  tags = {
+    Name = "OSSCorp"
+  }
+}
+
+
+
+
+resource "aws_subnet" "public" {
+  vpc_id     = aws_vpc.OSSCorp.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "Public-Subnet"
+  }
+}
+
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.OSSCorp.id
+  cidr_block = "10.0.2.0/24"
+
+  tags = {
+    Name = "Private-Subnet"
+  }
+}
+
+
+
+
+resource "aws_security_group" "OSSCorp-sg" {
+  name        = "OSSCorpsg"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.OSSCorp.id
+
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 22
+    to_port          =   22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+ 
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "OSSCorpsg-1"
+  }
+}
+
+
+
+
+resource "aws_internet_gateway" "OSSCorpgw" {
+  vpc_id = aws_vpc.OSSCorp.id
+
+  tags = {
+    Name = "OSSCorp-gw"
+  }
+}
+
+
+
+
+resource "aws_route_table" "OSSCorprt" {
+  vpc_id = aws_vpc.OSSCorp.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.OSSCorpgw.id
+  }
+
+  tags = {
+    Name = "OSSCorp-routetable"
+  }
+}
+
+
+
+resource "aws_route_table_association" "publicassociation" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.OSSCorprt.id
+}
+
+
+
+
+resource "aws_key_pair" "OSSCorpkey" {
+  key_name   = "OSSCorp-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCjl+3/nWaqYrg4jw+Qaw5yHGA4IeFJeNcGycuzmEr8spuAsQ3EDiE4R/djQjB4Q1KinxGcGqrAMDrfJhqbSo5SW5rgamSmerugwoC30sTo6ehsLUYT2oRv9Bz4tiX44iGGdOOnK722ArO5cP0sydVQr1mfGAz9wj2WxOo+TBLFB3ZZwV7TjlK+4dMivmBmfGhLEPQQxgCosRSeIR80AH36hf/X1Sq7rCmrjQqudxEeBX/kjr8+jhYuWMgc2vyQ2zeISawNO3quXYVFJ708El/QgbRPZgipNWO5AbFs5wJ0N+3Z6N/NwndOEZdRT9XwvYgG0ufqKnmXebctEfpEvwON root@ip-10-0-1-187.ap-southeast-1.compute.internal"
+}
+
+
+
+resource "aws_instance" "OSSCorppublic" {
+  ami           = "ami-02f26adf094f51167"
+  instance_type = "t2.micro"
+  subnet_id    =  aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.OSSCorp-sg.id]
+  key_name = "OSSCorp-key"
+ 
+
+  tags = {
+    Name = "OSSPublic-instanceWEBServer"
+  }
+}
+
+
+resource "aws_eip" "public_ip" {
+  instance = aws_instance.OSSCorppublic.id
+  vpc      = true
+}
+
+
+
+resource "aws_instance" "OSSCorpprivate" {
+  ami           = "ami-02f26adf094f51167"
+  instance_type = "t2.micro"
+  subnet_id    =  aws_subnet.private.id
+  vpc_security_group_ids = [aws_security_group.OSSCorp-sg.id]
+  key_name = "OSSCorp-key"
+ 
+
+  tags = {
+    Name = "OSSPrivate-instance-DBServer"
+  }
+}
+
+
+resource "aws_eip" "natgateway-public_ip" {
+  vpc      = true
+}
+
+
+
+
+resource "aws_route_table" "OSSCorprt-private" {
+  vpc_id = aws_vpc.OSSCorp.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.OSSCorp-natgw.id
+  }
+
+  tags = {
+    Name = "OSSCorp-routetableforNATGateway"
+  }
+}
+
+
+resource "aws_nat_gateway" "OSSCorp-natgw" {
+  allocation_id = aws_eip.natgateway-public_ip.id
+  subnet_id     = aws_subnet.public.id
+}
+
+
+resource "aws_route_table_association" "privateassociation" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.OSSCorprt-private.id
+}
+
+
+
+  
