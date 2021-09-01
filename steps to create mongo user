@@ -1,0 +1,40 @@
+
+mongo --host 127.0.0.1:27017
+
+db.createUser( {
+    user: "esgroot",
+    pwd: "ajaydiwakar",
+    roles: [{ role: "root", db: "admin" }]
+});
+
+
+
+rs.status()
+
+
+
+mongo -u johndoe -p --authenticationDatabase admin
+
+enter password when prompted
+
+
+
+
+ExecStart=/usr/bin/mongod --auth --config /etc/mongod.conf
+
+#sudo nano /etc/mongod.conf
+
+
+after that enable security authorisation in mongo.conf
+
+security:
+   authorisation:"enabled"
+
+
+
+sudo systemctl daemon-reload
+
+sudo service mongod restart
+
+
+
